@@ -1,107 +1,140 @@
-# Subsystem Telemetry & Alert Control System
-
-> Subsystem: Central controller and alert logic  
-> Role: Monitor all subsystems, alert for saturation, flow anomalies, and safety risks
+# IX-Proshchalnyy-Dar Control System Overview  
+> Subsystem: Real-time telemetry coordination, failsafe triggers, and module synchronization
 
 ---
 
-## 🧠 MCU Role
+## 🧠 Purpose
 
-A central **microcontroller** governs real-time status tracking for all system components:
+This file outlines the **central command system** that governs the real-time behavior of all subsystems:
+- Sensor fusion and status logic
+- Telemetry uplink (local and optional remote)
+- Failover state coordination
+- Energy budget orchestration
+- Module-to-module communications
 
-- FIDA Beam Control
-- UV Kill Reactor
-- Ion Exchange Core
-- Microbrush Capture System
-- Flow Rate Monitoring
-- Purity Output (TDS / Radiation Sensor)
-
-**Recommended MCU:**  
-- Arduino Nano 33 IoT (for wireless update potential and low power)
-- STM32 Blue Pill (for robust IO-heavy configs)
+This is the **centralized brain** of the IX-Proshchalnyy-Dar platform.
 
 ---
 
-## 🖥️ Data Inputs
+## 🖥️ Core Controller
 
-| Sensor Type              | Signal Pin | Purpose                                 |
-|--------------------------|------------|-----------------------------------------|
-| Flow Rate Sensor         | A0         | Ensure stable throughput                |
-| TDS / Conductivity       | A1         | Monitor purification quality            |
-| Voltage Bias (Ion Layer) | A2         | Check for charge decay                  |
-| Radiation Sensor         | A3         | Output zone radiation tracking          |
-| Color Sensor (Brush)     | A4         | Detect fouling in microbrush mesh       |
-| Internal Temp (CryoCore) | A5         | Prevent thermal breach warnings         |
+**Microcontroller:** STM32H7 (preferred) or RP2040 (alternate, lower precision)
 
----
-
-## 🔔 Alert Outputs
-
-| Alert Type                 | Trigger Threshold                            | Response                            |
-|----------------------------|-----------------------------------------------|-------------------------------------|
-| Low Flow                   | < 50 L/h for > 30 sec                         | Flash red LED, sound buzzer         |
-| High TDS Output            | > 600 ppm                                    | Warning LED + display message       |
-| Ion Bias Drop              | < 4.0V bias                                 | Recommend resin change              |
-| Radiation Above Safe Zone  | > 0.3 µSv/h                                  | Full system shutdown (failsafe)     |
-| Microbrush Saturated       | Color > 900 (white balance shift)            | Alert + mesh swap recommendation    |
-| Overheat Detected          | Internal temp > 60°C (CryoCore breach)       | Trigger CryoCore fan loop           |
+### Minimum Specs:
+- Dual-core 480MHz processor  
+- 2MB Flash / 1MB SRAM  
+- 12 ADC channels (0–3.3V)  
+- 4 UARTs  
+- 2 I²C buses  
+- 1 CAN bus for rugged modular ops  
+- Real-time clock (RTC) with backup cell
 
 ---
 
-## 🧾 Sample Arduino Loop
+## 🛰️ Communication Map
 
-```cpp
-void loop() {
-  int flow = analogRead(A0);
-  int tds = analogRead(A1);
-  float ion_bias = analogRead(A2);
-  int radiation = analogRead(A3);
-  int brush_color = analogRead(A4);
-  float cryo_temp = analogRead(A5);
+### Module Interlinks:
 
-  if (flow < 50) { alert("LOW FLOW RATE"); }
-  if (tds > 600) { alert("TDS HIGH – CHECK EXCHANGE RESINS"); }
-  if (ion_bias < 4.0) { alert("RESIN BIAS LOW"); }
-  if (radiation > 300) { alert("RADIATION ABOVE LIMIT – SHUTTING DOWN"); shutdown(); }
-  if (brush_color > 900) { alert("BRUSH FOULING DETECTED"); }
-  if (cryo_temp > 60) { activateCryoCoreCooling(); }
+| Module                          | Protocol  | Poll Frequency | Timeout Action       |
+|----------------------------------|-----------|----------------|----------------------|
+| UV Kill Reactor                  | I²C       | 500ms          | Pulse shutoff        |
+| Ion Exchange Matrix              | I²C       | 750ms          | Lock solenoid valve  |
+| FIDA Beam Array                  | UART      | 250ms          | Beam divergence fail |
+| Microfiber Brush Filter          | GPIO      | On rotation tick | Stall detect        |
+| Plasma Vaporizer                | CAN       | 1s             | Cooldown trigger     |
+| Clean Output Validation System   | UART      | 2s             | Auto divert output   |
+| Ambient Power Subsystem         | I²C       | 1.5s           | Failover to battery  |
 
-  delay(3000);
+---
+
+## 📟 Data Telemetry Uplink
+
+- Local USB flash logging (CSV + binary)
+- Optional LoRa uplink (433MHz / 868MHz)
+- Wi-Fi module (ESP32) optional for urban deployments
+- BLE for handheld maintenance readouts
+
+> Data format standard: JSON+timestamp, encrypted if uplink enabled
+
+---
+
+## 🛑 Failsafe Engine
+
+All subsystems can be interrupted mid-cycle if conditions are breached.
+
+**Examples:**
+- UV overheat → shuts down light module
+- Turbidity sensor red zone → isolates water into bin
+- Voltage drop under TEG/ambient→ reroutes beam usage
+- Filter rotation fault → triggers beam pause + acoustic alert
+
+All triggered conditions are recorded in `/logs/telemetry_events.log` with UTC timestamp and fail reason.
+
+---
+
+## 🧬 Interlink Ping Logic
+
+Each module sends a “HEARTBEAT” ping:
+- ✅ = module online and stable
+- ⚠️ = warning flag (running within limit, but marginal)
+- ❌ = critical fail or timeout, triggers global alert
+
+The controller aggregates all responses every 4s into:
+- Live status display (if screen present)
+- Color LED ring (Green / Yellow / Red logic)
+
+---
+
+## 🧾 Example Status Output
+
+```json
+{
+  "time": "2025-07-25T23:41:00Z",
+  "uv_kill_reactor": "✅",
+  "ion_exchange": "✅",
+  "fida_beam_array": "⚠️",
+  "brush_filter": "✅",
+  "plasma_vaporizer": "✅",
+  "output_validation": "✅",
+  "power_system": "✅"
 }
 ```
 
 ---
 
-## 📟 Optional Display / Output
+## 🔐 Maintenance Override Logic
 
-| Module            | Use                               |
-|------------------|------------------------------------|
-| I2C OLED (SSD1306) | Display purity, radiation, TDS     |
-| RGB LED bar       | Visual status – green/orange/red |
-| Passive buzzer    | Audible alert (critical faults)   |
+- Manual override via 5-digit code from secure NFC tag
+- Diagnostic port allows selective module reboots
+- “SAFE MODE” disables all beam or UV components for human intervention
 
 ---
 
-## 🔋 Power Use
+## 🔋 Energy Budget Coordination
 
-MCU + sensors consume < 250 mA at peak. Can run on:
-- 5V via step-down from main solar/battery system
-- Or independent Li-Ion pack for resilience
+Based on available ambient harvest:
+- Priority goes to output water validation, UV kill loop, and ion lattice
+- FIDA beam pulses only allowed when all other modules are stable
+- CryoCore thermal dump uses reclaimed heat mapped via temp sensors
 
----
-
-## 🧠 Future Extensions
-
-- Wireless logging via MQTT
-- Cloud push to environmental dashboard
-- Remote reset / kill switch for edge operation
+> The controller intelligently balances limited energy to sustain mission-critical modules.
 
 ---
 
-### Integration
+## 💡 Expandability
 
-This file integrates logic from:
-- `uv_kill_reactor/DeepUV_ModuleSpecs.md`
-- `ion_exchange/IonCapture_Logic.md`
-- `capture_brush_system/MicroFilter_FluxPattern.md`
+- Additional sensors can be added via I²C chain  
+- Modular software allows adding external pump, alarm horn, GSM beacon, or cloud sync  
+- GPIO pins exposed for experimental subsystems (ex: AI smell sensor, sonar scan)
 
+---
+
+## Final Notes
+
+This telemetry brain:
+- Never guesses  
+- Never trusts default readings  
+- Always reroutes to safety if water quality or radiation thresholds are exceeded
+
+> This is not just logging — it’s full system control built on hard logic.  
+> No PR compliance. Just facts and instant action.
