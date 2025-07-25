@@ -1,0 +1,50 @@
+{
+  "project": "IX-Proshchalnyy-Dar",
+  "version": "1.0.0",
+  "system_identity": {
+    "unit_serial": "IXPD-001-RUS",
+    "location_tag": "RU-WATER-ZONE-B05",
+    "build_date": "2025-07-25T00:00:00Z"
+  },
+  "telemetry": {
+    "enabled": true,
+    "uplink_interval_seconds": 60,
+    "data_format": "CSV",
+    "critical_only_mode": false,
+    "fallback_buffer_size_mb": 5,
+    "auto_flush_on_threshold": true
+  },
+  "sensor_thresholds": {
+    "tds_ppm_max": 90,
+    "orp_mV_min": 300,
+    "ph_min": 6.5,
+    "ph_max": 8.2,
+    "turbidity_NTU_max": 1.0,
+    "pfas_ppm_max": 3.0,
+    "em_microtesla_max": 0.12,
+    "thermal_delta_C_max": 2.0,
+    "cryo_max_temp_C": 45
+  },
+  "failover_modes": {
+    "sensor_loss": "reroute_to_bin_02",
+    "pfas_exceedance": "beam_gate_trigger",
+    "uv_chamber_overtemp": "cryo_lockout",
+    "ambient_power_loss": "sleep_mode_engage"
+  },
+  "logging": {
+    "log_directory": "/logs/telemetry/",
+    "log_rotation_days": 7,
+    "upload_retry_attempts": 3,
+    "timestamp_format": "ISO-8601"
+  },
+  "status_led_config": {
+    "green": "all_systems_nominal",
+    "yellow": "warning_threshold_near",
+    "red": "system_lockout_triggered"
+  },
+  "acoustic_output": {
+    "normal_chirp_freq_Hz": 500,
+    "warning_ping_freq_Hz": 1000,
+    "failure_tone_dual_freq_Hz": [900, 1300]
+  }
+}
